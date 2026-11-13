@@ -1,0 +1,10 @@
+{
+  "url": "https://api.github.com/repos/nodejs/node/issues?state=all&per_page=100&page=459",
+  "status": 422,
+  "body": {
+    "message": "Pagination with the page parameter is not supported for large datasets, please use cursor based pagination (after/before)",
+    "documentation_url": "https://docs.github.com/rest/issues/issues#list-repository-issues",
+    "status": "422"
+  },
+  "checkedAt": "2026-11-13T15:48:59.814Z"
+}

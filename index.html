@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проблеми пагінації в сучасному вебі — Мазур Богдан, 1СП-23Б</title>
+<!--
+  Презентація у стилі сайту ФІТКІ (site/): шрифт Onest, кольори ВНТУ, світла/темна тема.
+  Керування: ← → / пробіл / PageUp/PageDown, Home/End, T — тема, P — друк у PDF.
+  Кожен факт має джерело — повний список на останньому слайді та в tekst-vystupu.md.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("deck-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+:root {
+  --blue: #0b4fb3; --blue-2: #082f6e; --yellow: #ffd200;
+  --ink: #0e1a33; --ink-2: #44506a; --ink-3: #6b7690;
+  --paper: #f5f4ef; --surface: #ffffff; --hover: #f0efe9; --line: #e2e0d8;
+  --bad: #d4405a; --good: #1f9d6b;
+  --code-bg: #0e1a33; --code-ink: #e8edf7;
+  --font: 'Onest', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', Consolas, monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --blue: #3b82f0; --blue-2: #2a6ad8;
+  --ink: #e8edf7; --ink-2: #b2bcd2; --ink-3: #8390aa;
+  --paper: #0a1122; --surface: #111a2f; --hover: #18233d; --line: #233050;
+  --code-bg: #060b17;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font); overflow: hidden; -webkit-font-smoothing: antialiased; }
+
+/* Сцена 16:9, масштабується під вікно */
+.viewport { position: fixed; inset: 0; overflow: hidden; }
+.deck { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px; transform: translate(-50%, -50%) scale(var(--s, 1)); transform-origin: center; }
+.slide {
+  position: absolute; inset: 0; padding: 72px 88px 88px;
+  background: var(--paper); display: flex; flex-direction: column;
+  opacity: 0; visibility: hidden; transform: translateX(40px);
+  transition: opacity .45s ease, transform .45s ease, visibility .45s;
+}
+.slide.is-active { opacity: 1; visibility: visible; transform: none; }
+.slide.is-prev { transform: translateX(-40px); }
+
+/* Колонтитул */
+.slide::after {
+  content: attr(data-foot); position: absolute; left: 88px; bottom: 34px;
+  font-size: 15px; color: var(--ink-3); font-weight: 600;
+}
+.num { position: fixed; right: 22px; bottom: 16px; font-size: 14px; color: var(--ink-3); font-weight: 700; z-index: 5; }
+.bar { position: fixed; left: 0; top: 0; height: 5px; background: var(--yellow); transition: width .45s ease; z-index: 5; }
+
+/* Типографіка */
+.kicker { font-size: 18px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); }
+h1 { font-size: 84px; line-height: 1.02; letter-spacing: -.03em; margin: 18px 0 0; font-weight: 800; }
+h2 { font-size: 54px; line-height: 1.06; letter-spacing: -.02em; margin: 14px 0 28px; font-weight: 800; }
+h3 { font-size: 24px; margin: 0 0 10px; font-weight: 800; }
+p, li { font-size: 22px; line-height: 1.45; color: var(--ink-2); }
+p { margin: 0 0 14px; }
+b, strong { color: var(--ink); }
+.mark { background: linear-gradient(transparent 62%, var(--yellow) 62%, var(--yellow) 92%, transparent 92%); padding: 0 .06em; white-space: nowrap; }
+:root[data-theme="dark"] .mark { color: var(--ink); }
+.src { margin-top: auto; padding-top: 16px; font-size: 14px; color: var(--ink-3); }
+.src a { color: var(--ink-3); }
+ul { margin: 0; padding-left: 26px; }
+li { margin-bottom: 8px; }
+
+/* Сітки та картки */
+.grid { display: grid; gap: 22px; }
+.g2 { grid-template-columns: 1fr 1fr; }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px; }
+.card p, .card li { font-size: 19px; }
+.card--accent { border-top: 6px solid var(--c, var(--blue)); }
+.tag { display: inline-block; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 5px 10px; border-radius: 7px; background: var(--hover); color: var(--ink-2); margin-bottom: 10px; }
+.tag--bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.tag--good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+
+/* Кейс: Компанія → Суть → Наслідки → Як вирішили */
+.case { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--surface); }
+.case > div { padding: 22px 24px; border-right: 1px solid var(--line); }
+.case > div:last-child { border-right: 0; }
+.case .lbl { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; }
+.case p { font-size: 19px; margin: 0; }
+.case .who { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.15; }
+.case .fix { background: color-mix(in srgb, var(--good) 8%, var(--surface)); }
+.case .hurt { background: color-mix(in srgb, var(--bad) 7%, var(--surface)); }
+
+/* Великі цифри */
+.stat > b { display: block; font-size: 64px; line-height: 1; letter-spacing: -.03em; color: var(--blue); }
+.stat > span { display: block; margin-top: 10px; font-size: 19px; color: var(--ink-2); line-height: 1.35; }
+
+/* Таймлайн */
+.tl { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; margin-top: 8px; }
+.tl div { position: relative; padding-top: 30px; }
+.tl div::before { content: ""; position: absolute; top: 9px; left: 0; right: -18px; height: 3px; background: var(--line); }
+.tl div:last-child::before { right: 0; }
+.tl div::after { content: ""; position: absolute; top: 0; left: 0; width: 21px; height: 21px; border-radius: 50%; background: var(--surface); border: 4px solid var(--c, var(--blue)); }
+.tl b { display: block; font-size: 26px; color: var(--c, var(--blue)); }
+.tl span { font-size: 18px; color: var(--ink-2); line-height: 1.35; display: block; margin-top: 4px; }
+
+/* Код */
+pre { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 16px; padding: 22px 26px; font-family: var(--mono); font-size: 19px; line-height: 1.55; overflow: hidden; }
+.k { color: #7fb4ff; } .c { color: #8a96b2; } .s { color: #ffd200; } .n { color: #ff8fa3; }
+
+/* Діаграма Shopify */
+.bars { display: grid; gap: 14px; }
+.bars .row { display: grid; grid-template-columns: 215px 1fr 140px; align-items: center; gap: 16px; font-size: 19px; }
+.bars .row span:first-child { font-family: var(--mono); color: var(--ink-2); text-align: right; white-space: nowrap; font-size: 17px; }
+.bars .track { height: 30px; border-radius: 8px; background: var(--hover); position: relative; overflow: hidden; }
+.bars .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: var(--bad); min-width: 4px; }
+.bars .fill.ok { background: var(--good); }
+.bars .val { font-weight: 800; font-family: var(--mono); }
+
+/* Дрейф даних */
+.drift { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.feed { display: flex; gap: 8px; flex-wrap: wrap; }
+.feed i { font-style: normal; width: 58px; height: 58px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 20px; background: var(--hover); border: 2px solid var(--line); color: var(--ink); }
+.feed i.new { background: var(--yellow); color: #0e1a33; border-color: var(--yellow); }
+.feed i.dup { background: color-mix(in srgb, var(--bad) 18%, transparent); border-color: var(--bad); color: var(--bad); }
+.feed i.pg { border-color: var(--blue); }
+
+/* Титул */
+.title { justify-content: center; }
+.title .logos { display: flex; gap: 16px; margin-bottom: 34px; }
+.title .logos img { width: 84px; height: 84px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,210,0,.7); }
+.title .who { margin-top: 44px; font-size: 26px; color: var(--ink-2); }
+.title .who b { color: var(--ink); }
+
+/* Кнопки керування */
+.ui { position: fixed; right: 18px; top: 18px; display: flex; gap: 8px; z-index: 5; }
+.ui button { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 18px; cursor: pointer; }
+.ui button:hover { background: var(--hover); }
+
+/* Скріншоти у «вікні браузера» */
+.shot { border-radius: 14px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px -22px rgba(14,26,51,.45); }
+.shot__bar { display: flex; align-items: center; gap: 7px; padding: 9px 14px; background: var(--hover); border-bottom: 1px solid var(--line); }
+.shot__bar i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+.shot__bar i:nth-child(2) { background: #febc2e; } .shot__bar i:nth-child(3) { background: #28c840; }
+.shot__bar span { margin-left: 10px; font-family: var(--mono); font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot figcaption { padding: 10px 14px; font-size: 15px; color: var(--ink-3); }
+.callout { display: inline-block; padding: 4px 10px; border-radius: 8px; background: var(--yellow); color: #0e1a33; font-weight: 800; font-size: 16px; }
+
+/* Словник */
+.term { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+.term > b { display: block; font-size: 22px; color: var(--blue); margin-bottom: 6px; }
+.term p { font-size: 17.5px; margin: 0; line-height: 1.4; }
+.term em { font-style: normal; color: var(--ink-3); font-size: 15.5px; display: block; margin-top: 6px; }
+
+/* Інтерактивні демо */
+.demo { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+.demo-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.demo-ctl button, .dbtn {
+  font: 700 16px/1 var(--font); padding: 11px 15px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--hover); color: var(--ink);
+}
+.demo-ctl button[aria-pressed="true"], .dbtn--primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.dbtn--yellow { background: var(--yellow); border-color: var(--yellow); color: #0e1a33; }
+.demo-out { font-family: var(--mono); font-size: 17px; color: var(--ink-2); }
+.meter { display: grid; grid-template-columns: 130px 1fr 170px; gap: 12px; align-items: center; margin: 8px 0; font-size: 17px; }
+.meter .track { height: 26px; border-radius: 8px; background: var(--hover); overflow: hidden; position: relative; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 8px; transition: width .9s cubic-bezier(.3,.7,.2,1); }
+
+/* Демо «три способи» */
+.phone-demo { display: grid; grid-template-columns: 330px 1fr; gap: 26px; }
+.phone-scr { height: 520px; border-radius: 30px; border: 10px solid #0e1a33; background: #fff; overflow: hidden; position: relative; }
+.phone-scr .scroll { position: absolute; inset: 0; overflow-y: auto; padding: 10px; scroll-behavior: smooth; }
+.phone-scr .scroll::-webkit-scrollbar { width: 0; }
+.p-item { display: grid; grid-template-columns: 46px 1fr; gap: 10px; align-items: center; padding: 8px; border-radius: 10px; border: 1px solid #e6e4dc; margin-bottom: 6px; color: #0e1a33; font-size: 14px; background: #fff; }
+.p-item i { width: 46px; height: 36px; border-radius: 6px; background: linear-gradient(135deg, #cfe0ff, #ffe98a); }
+.p-item.hl { outline: 3px solid #ffd200; }
+.p-pages { display: flex; gap: 5px; justify-content: center; margin: 10px 0; flex-wrap: wrap; }
+.p-pages span { min-width: 30px; padding: 6px 8px; text-align: center; border-radius: 7px; border: 1px solid #d9d6cc; font-size: 13px; color: #0e1a33; }
+.p-pages span.on { background: #0b4fb3; color: #fff; border-color: #0b4fb3; }
+.p-more { display: block; margin: 8px auto; padding: 9px 16px; border-radius: 9px; border: 0; background: #1f9d6b; color: #fff; font: 700 14px var(--font); }
+.p-foot { margin-top: 10px; padding: 14px; border-radius: 10px; background: #0e1a33; color: #fff; font-size: 13px; }
+.p-url { position: absolute; left: 0; right: 0; top: 0; padding: 6px 10px; background: #f0efe9; font: 12px var(--mono); color: #44506a; z-index: 2; border-bottom: 1px solid #e2e0d8; }
+.p-loading { text-align: center; color: #6b7690; font-size: 13px; padding: 10px; }
+.log { font-size: 19px; line-height: 1.5; }
+.log li { margin-bottom: 6px; }
+
+/* Демо DOM */
+.dom-box { height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); position: relative; }
+.dom-row { height: 34px; display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 15px; color: var(--ink-2); }
+.dom-count b { font-size: 46px; display: block; line-height: 1; letter-spacing: -.02em; }
+
+@media print {
+  @page { size: 1600px 900px; margin: 0; }
+  html, body { overflow: visible; height: auto; }
+  .viewport { position: static; display: block; }
+  .deck { position: static !important; transform: none !important; width: 1600px; height: auto; }
+  .slide { position: relative; opacity: 1; visibility: visible; transform: none; width: 1600px; height: 900px; page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .ui, .bar, .num { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="ui">
+  <button type="button" id="prev" aria-label="Попередній слайд">←</button>
+  <button type="button" id="next" aria-label="Наступний слайд">→</button>
+  <button type="button" id="theme" aria-label="Тема">◐</button>
+</div>
+
+<div class="viewport"><div class="deck" id="deck">
+
+<!-- 1. Титул -->
+<section class="slide title">
+  <div class="logos"><img src="img/fitki-logo.png" alt=""><img src="img/vnty-logo.png" alt=""></div>
+  <div class="kicker">Презентація · Веб-технології</div>
+  <h1>Проблеми <span class="mark">пагінації</span><br>в сучасному вебі</h1>
+  <p style="font-size:28px;margin-top:24px">Як було раніше, чому виникли проблеми і які наслідки це має сьогодні</p>
+  <div class="who"><b>Мазур Богдан</b> · група 1СП-23Б · ВНТУ, ФІТКІ</div>
+</section>
+
+<!-- Вступ: веб тоді і зараз -->
+<section class="slide" data-foot="Вступ">
+  <div class="kicker">Вступ · Звідки взагалі взялась проблема</div>
+  <h2>Веб тоді і зараз: контенту стало <span class="mark">в тисячі разів більше</span></h2>
+  <div class="grid" style="grid-template-columns:1fr 1.25fr;gap:34px">
+    <div>
+      <div class="card card--accent" style="--c:var(--ink-3);margin-bottom:18px">
+        <span class="tag">Ранній веб (1990-ті – 2000-ні)</span>
+        <p>Сайт — це кілька сторінок тексту з картинками. Кожен клік = <b>сервер присилає нову сторінку цілком</b>. Довгий список ріжуть на частини, як книжку: <b>сторінка 1, 2, 3</b>. Просто і зрозуміло.</p>
+      </div>
+      <div class="card card--accent" style="--c:var(--blue)">
+        <span class="tag">Сьогодні</span>
+        <p><b>Сотні тисяч товарів</b>, фото, відео, телефони замість комп'ютерів. Людина хоче бачити все <b>миттєво й без перезавантажень</b>, а магазин — щоб його <b>знайшли в Google</b> і щоб <b>сервер не впав</b>.</p>
+      </div>
+      <p style="margin-top:18px"><b>Пагінація</b> — це спосіб показати великий список частинами. Питання лише одне: <b>як ділити так, щоб нікому не стало гірше?</b></p>
+    </div>
+    <figure class="shot" style="margin:0">
+      <div class="shot__bar"><i></i><i></i><i></i><span>rozetka.com.ua/ua/notebooks/c80004/</span></div>
+      <img src="img/rozetka-catalog-top.png" alt="Каталог ноутбуків Rozetka: знайдено 209 163 товари">
+      <figcaption><span class="callout">209 163 ноутбуки</span> в одному розділі Rozetka. Показати все на одній сторінці неможливо — потрібна пагінація. Знімок автора, 13.11.2026</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- Словник 1 -->
+<section class="slide" data-foot="Словник">
+  <div class="kicker">Словник · Простими словами</div>
+  <h2>Терміни, без яких далі <span class="mark">не зрозуміло</span></h2>
+  <div class="grid g3">
+    <div class="term"><b>URL (адреса)</b><p>Унікальна адреса сторінки в рядку браузера: <code>rozetka.com.ua/notebooks/page=2/</code>. Нею можна поділитись, додати в закладки, повернутись «Назад».</p><em>Аналогія: поштова адреса будинку.</em></div>
+    <div class="term"><b>?page=2 — пагінація</b><p>Номер частини списку прямо в адресі. Сервер бачить «2» і віддає товари 61–120. Кожна частина — <b>окрема сторінка з власною адресою</b>.</p><em>Аналогія: номер сторінки в книжці.</em></div>
+    <div class="term"><b>AJAX</b><p>Спосіб, коли JavaScript <b>просить у сервера лише нові дані</b> й домальовує їх на поточній сторінці — <b>без перезавантаження</b>. Так працює «Показати ще» і нескінченна стрічка.</p><em>Аналогія: офіціант доносить страву, а не переставляє весь стіл.</em></div>
+    <div class="term"><b>DOM</b><p><b>Document Object Model</b> — «дерево» з усіх елементів сторінки (блоків, кнопок, картинок), яке браузер тримає <b>в пам'яті</b>. Кожна картка товару — десятки вузлів цього дерева.</p><em>Аналогія: креслення будинку, за яким браузер «будує» сторінку.</em></div>
+    <div class="term"><b>History API · pushState</b><p>Можливість браузера, через яку JavaScript <b>змінює адресу в рядку без перезавантаження</b>: <code>history.pushState(…, '?page=2')</code>. Тоді «Назад» і посилання працюють.</p><em>Аналогія: позначка «я тут» у книжці.</em></div>
+    <div class="term"><b>#! (hashbang)</b><p>Стара хитрість: частина адреси після <code>#</code> на сервер <b>не відправляється</b>, її читає лише JavaScript. Сайти робили адреси <code>/#!/page/2</code> — і без JS вони не працювали.</p><em>Попередник pushState, від нього відмовились.</em></div>
+  </div>
+</section>
+
+<!-- Словник 2 -->
+<section class="slide" data-foot="Словник">
+  <div class="kicker">Словник · Пошук і бази даних</div>
+  <h2>SEO, бази даних і <span class="mark">курсор</span></h2>
+  <div class="grid g3">
+    <div class="term"><b>SEO</b><p><b>Search Engine Optimization</b> — робота над тим, щоб сторінки сайту <b>знаходились у Google</b>. Для магазину це безкоштовні покупці: якщо Google не бачить сторінку з товаром, її ніхто не знайде через пошук.</p><em>Аналогія: вивіска й адреса магазину в довіднику.</em></div>
+    <div class="term"><b>Пошуковий робот (Googlebot)</b><p>Програма Google, яка ходить сайтами за посиланнями і запам'ятовує сторінки (<b>індексує</b>). Він <b>не скролить і не натискає кнопки</b> — лише переходить за посиланнями <code>&lt;a href&gt;</code>.</p><em>Аналогія: бібліотекар, що каталогізує книжки.</em></div>
+    <div class="term"><b>rel="prev" / rel="next"</b><p>Підказки в коді сторінки: «попередня частина серії тут, наступна — тут». Google радив їх з 2011 року, щоб розуміти, що сторінки 1–100 — одна серія.</p><em>Аналогія: стрілки «далі» на табличках.</em></div>
+    <div class="term"><b>База даних і SQL</b><p>Сховище, де лежать усі товари, пости, повідомлення. <b>SQL</b> — мова запитів: «дай 20 найновіших постів». Від швидкості запиту залежить, як швидко відкриється сторінка.</p><em>Аналогія: величезний склад із картотекою.</em></div>
+    <div class="term"><b>OFFSET</b><p>Команда «<b>пропусти перші N рядків</b>». Сторінка 3 по 20 = OFFSET 40. Проблема: щоб пропустити, база мусить їх <b>перерахувати</b> — і що далі сторінка, то довше.</p><em>Аналогія: шукати 1000-ну книжку, рахуючи з першої.</em></div>
+    <div class="term"><b>Курсор (keyset)</b><p>Замість номера сторінки — «<b>продовж після запису №6 812</b>». За <b>індексом</b> база одразу стрибає в потрібне місце. Швидко на будь-якій глибині.</p><em>Аналогія: закладка в книжці замість перерахунку сторінок.</em></div>
+  </div>
+</section>
+
+<!-- 4 сторони -->
+<section class="slide" data-foot="Вступ">
+  <div class="kicker">Ключова ідея всієї доповіді</div>
+  <h2>Пагінація має догодити <span class="mark">чотирьом сторонам</span></h2>
+  <div class="grid g4">
+    <div class="card card--accent" style="--c:var(--blue)"><span class="tag">1 · Людина</span><p>Швидко знайти потрібне, не загубити місце після «Назад», дістатись до футера з доставкою й контактами.</p></div>
+    <div class="card card--accent" style="--c:var(--good)"><span class="tag">2 · Пошуковик</span><p>Побачити <b>кожну</b> сторінку каталогу за звичайними посиланнями, щоб товари знаходились у Google.</p></div>
+    <div class="card card--accent" style="--c:var(--bad)"><span class="tag">3 · Сервер і база</span><p>Віддати будь-яку сторінку за мілісекунди, навіть 10 000-ну, і не «покласти» сервер для всіх.</p></div>
+    <div class="card card--accent" style="--c:#b8860b"><span class="tag">4 · Браузер</span><p>Не з'їсти всю пам'ять телефона, коли людина прогорнула тисячу товарів.</p></div>
+  </div>
+  <p style="margin-top:34px;font-size:27px">Усі проблеми далі — це випадки, коли рішення <b>покращило одну сторону і зламало іншу</b>. Нескінченний скрол — зручно гортати людині, але погано пошуковику. OFFSET — просто програмісту, але погано базі.</p>
+  <p style="font-size:27px"><b>Тому найкраще рішення сьогодні — гібрид</b>: кожній стороні своє.</p>
+</section>
+
+<!-- 2. Таймлайн -->
+<section class="slide" data-foot="Хронологія">
+  <div class="kicker">Як ми сюди прийшли</div>
+  <h2>Від <span class="mark">?page=2</span> до нескінченної стрічки — і назад</h2>
+  <div class="tl" style="grid-template-columns:repeat(5,1fr)">
+    <div style="--c:var(--ink-3)"><b>2009</b><span>Google пропонує схему сканування AJAX-сторінок <code>#!</code></span></div>
+    <div style="--c:var(--bad)"><b>2011–2012</b><span>Gawker ламає сайти на <code>#!</code>; Etsy провалює тест infinite scroll; Twitter відмовляється від <code>#!</code></span></div>
+    <div style="--c:var(--blue)"><b>2014–2015</b><span>NN/g: «нескінченний скрол не для кожного сайту»; Google відмовляється від AJAX-схеми</span></div>
+    <div style="--c:var(--bad)"><b>2019</b><span>Google визнає, що роками не використовує rel="prev/next"; Shopify і Slack переходять на курсори</span></div>
+    <div style="--c:var(--good)"><b>2021 → 2024</b><span>Google вводить безперервну видачу — і у 2024 повертає звичайні сторінки</span></div>
+  </div>
+  <div class="grid g3" style="margin-top:44px">
+    <div class="card card--accent" style="--c:var(--blue)"><h3>Класична пагінація</h3><p>Кожна сторінка має свою адресу. Зрозуміло, де ти, легко повернутись. Але на сервері — <b>OFFSET</b>.</p></div>
+    <div class="card card--accent" style="--c:var(--bad)"><h3>Нескінченний скрол</h3><p>Контент довантажується JavaScript. Зручно гортати, але <b>губиться позиція, футер і URL</b>.</p></div>
+    <div class="card card--accent" style="--c:var(--good)"><h3>Гібрид</h3><p>«Показати ще» + URL через History API + курсор на бекенді + віртуалізація списку.</p></div>
+  </div>
+  <div class="src">Джерела наведено на відповідних слайдах та в списку літератури.</div>
+</section>
+
+<!-- ДЕМО: три способи -->
+<section class="slide" data-foot="Інтерактивне демо">
+  <div class="kicker">Демо · Спробуйте самі</div>
+  <h2>Три способи показати каталог — і <span class="mark">кнопка «Назад»</span></h2>
+  <div class="phone-demo">
+    <div class="phone-scr"><div class="p-url" id="d1-url">shop.ua/catalog</div><div class="scroll" id="d1-scroll"></div></div>
+    <div>
+      <div class="demo-ctl" id="d1-modes">
+        <button type="button" data-mode="pages" aria-pressed="true">Сторінки 1 2 3</button>
+        <button type="button" data-mode="infinite" aria-pressed="false">Нескінченний скрол</button>
+        <button type="button" data-mode="hybrid" aria-pressed="false">Гібрид: «Показати ще» + URL</button>
+      </div>
+      <div class="demo-ctl">
+        <button type="button" class="dbtn--yellow" id="d1-deep">1. Прогорнути глибоко</button>
+        <button type="button" class="dbtn--primary" id="d1-open">2. Відкрити товар → «Назад»</button>
+        <button type="button" id="d1-footer">3. Дістатись до футера</button>
+      </div>
+      <ul class="log" id="d1-log"><li>Оберіть спосіб і натисніть кнопки 1 → 2 → 3.</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Etsy -->
+<section class="slide" data-foot="Розділ 1 · UX та бізнес">
+  <div class="kicker">Розділ 1 · UX та бізнес-провали</div>
+  <h2>Etsy: нескінченний скрол <span class="mark">погіршив пошук</span></h2>
+  <div class="case">
+    <div><div class="lbl">Компанія / джерело</div><div class="who">Etsy</div><p style="margin-top:10px">Доповідь Dan McKinley «Design for Continuous Experimentation», 2012</p></div>
+    <div><div class="lbl">Суть проблеми</div><p>Команда вважала: <b>більше товарів і швидше</b> = кращий досвід. Infinite scroll запустили в пошуку <b>без перевірки цієї гіпотези</b>.</p></div>
+    <div class="hurt"><div class="lbl">Наслідки (A/B-тест)</div><p>У групі з нескінченним скролом:<br>• <b>менше кліків</b> по товарах<br>• <b>менше «обраного»</b><br>• <b>менше покупок з пошуку</b> — люди перестали ним користуватись</p></div>
+    <div class="fix"><div class="lbl">Як вирішили</div><p>Місяць шукали баг — не знайшли. Окремо перевірили гіпотези: «більше результатів» і «швидкість» на покупки не вплинули. <b>Infinite scroll прибрали.</b></p></div>
+  </div>
+  <p style="margin-top:30px;font-size:26px"><b>Висновок:</b> «It was clear we'd made search worse» — популярний патерн без перевірки гіпотез може знизити ключові метрики.</p>
+  <div class="src">Джерело: Dan McKinley, «Design for Continuous Experimentation» — mcfunley.com/continuous-experimentation</div>
+</section>
+
+<!-- 4. Baymard -->
+<section class="slide" data-foot="Розділ 1 · UX та бізнес">
+  <div class="kicker">Розділ 1 · Дослідження e-commerce</div>
+  <h2>Baymard Institute: <span class="mark">90%+</span> ламають кнопку «Назад»</h2>
+  <div class="grid g4">
+    <div class="card stat"><b>50+</b><span>провідних інтернет-магазинів у річних юзабіліті-тестах</span></div>
+    <div class="card stat"><b>&gt;90%</b><span>сайтів із «Load more» <b>неправильно відпрацьовують «Назад»</b> — користувач втрачає місце в списку</span></div>
+    <div class="card stat"><b>8%</b><span>із топ-50 магазинів США використовували «Load more» (2016) — решта на пагінації</span></div>
+    <div class="card stat"><b>100+</b><span>товарів переглядали з infinite scroll — але <b>гірше читали</b> кожен</span></div>
+  </div>
+  <div class="grid g3" style="margin-top:26px">
+    <div class="card"><span class="tag tag--bad">Pogo-sticking</span><p>Відкрив товар → «Назад» → список з початку. Людина знову гортає або йде з сайту.</p></div>
+    <div class="card"><span class="tag tag--bad">Недосяжний футер</span><p>На мобільних тестувальники не могли дістатись до «Доставка», «FAQ», «Повна версія» — футер тікав униз.</p></div>
+    <div class="card"><span class="tag tag--good">Рекомендація</span><p>Lazy-load 10–30 товарів, кнопка «Load more» після 50–100, URL оновлювати через <code>history.pushState()</code>.</p></div>
+  </div>
+  <div class="src">Джерело: Baymard Institute / Smashing Magazine, «Infinite Scrolling, Pagination Or "Load More" Buttons? Usability Findings In eCommerce», 2016</div>
+</section>
+
+<!-- 5. NN/g -->
+<section class="slide" data-foot="Розділ 1 · UX та бізнес">
+  <div class="kicker">Розділ 1 · Nielsen Norman Group</div>
+  <h2>Нескінченний скрол — <span class="mark">не для кожного сайту</span></h2>
+  <div class="grid g2">
+    <div>
+      <p style="font-size:26px">Hoa Loranger (NN/g, 2014): <b>«Endless scrolling is not recommended for goal-oriented finding tasks»</b> — тобто для пошуку конкретного товару чи статті.</p>
+      <ul>
+        <li><b>«Інформаційна безодня»</b> — люди дивляться, але не діють → нижча конверсія (той самий «параліч вибору»).</li>
+        <li><b>Втрата орієнтира:</b> «на 3-й сторінці» запам'ятати легко, позицію в безкінечній стрічці — ні.</li>
+        <li><b>Повзунок прокрутки бреше</b> — не видно, скільки ще лишилось.</li>
+        <li><b>Немає відчуття завершення</b>, яке дає пагінація.</li>
+      </ul>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card card--accent" style="--c:var(--good)"><span class="tag tag--good">Підходить</span><p>Стрічки однорідного контенту для розваги: соцмережі, фото, новини.</p></div>
+      <div class="card card--accent" style="--c:var(--bad)"><span class="tag tag--bad">Не підходить</span><p>Каталоги, пошук, порівняння, коли треба повернутись або знайти конкретне.</p></div>
+    </div>
+  </div>
+  <div class="src">Джерело: Hoa Loranger, «Infinite Scrolling Is Not for Every Website», Nielsen Norman Group, 02.02.2014 — nngroup.com/articles/infinite-scrolling</div>
+</section>
+
+<!-- 6. Google Search -->
+<section class="slide" data-foot="Розділ 1 · UX та бізнес">
+  <div class="kicker">Розділ 1 · Навіть Google</div>
+  <h2>Google Search: безперервна видача → <span class="mark">знову сторінки</span></h2>
+  <div class="tl" style="grid-template-columns:repeat(3,1fr)">
+    <div style="--c:var(--blue)"><b>Жовтень 2021</b><span>Безперервна прокрутка на мобільних (США, англійська): до 4 сторінок, далі кнопка</span></div>
+    <div style="--c:var(--blue)"><b>Грудень 2022</b><span>Те саме на десктопі: до 6 сторінок без кліків — «більше корисних результатів із меншою кількістю кліків»</span></div>
+    <div style="--c:var(--good)"><b>Червень 2024</b><span>Google вимикає функцію: на десктопі — «Далі», на мобільних — «Інші результати»</span></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1.1fr 1fr;gap:26px;margin-top:34px">
+    <div class="case" style="grid-template-columns:1fr 1fr">
+      <div><div class="lbl">Суть</div><p>Автопідвантаження результатів, які людина <b>не просила</b>.</p></div>
+      <div class="hurt"><div class="lbl">Наслідки</div><p>Не дало <b>«суттєво вищої» задоволеності</b>; зайве завантаження.</p></div>
+      <div class="fix" style="grid-column:1/-1;border-top:1px solid var(--line)"><div class="lbl">Як вирішили</div><p>Повернули явну навігацію — результати вантажаться <b>лише на запит</b>, видача швидша.</p></div>
+    </div>
+    <figure class="shot" style="margin:0">
+      <div class="shot__bar"><i></i><i></i><i></i><span>google.com/search?q=ноутбук+купити</span></div>
+      <img src="img/google-pagination.jpg" alt="Пагінація Google: Gooooooogle 1 2 3 4 5 6 7, Уперед" style="max-height:260px;object-fit:cover;object-position:bottom">
+      <figcaption>Знову класичні сторінки «Gooooooogle 1 2 3 … Уперед». Знімок автора, 13.11.2026</figcaption>
+    </figure>
+  </div>
+  <div class="src">Джерела: 9to5Google (14.10.2021); Search Engine Land «Google brings continuous scroll to desktop» (12.2022); Search Engine Land / Android Authority (06.2024)</div>
+</section>
+
+<!-- 7. Як Google бачить -->
+<section class="slide" data-foot="Розділ 2 · SEO та індексація">
+  <div class="kicker">Розділ 2 · SEO та індексація</div>
+  <h2>Пошуковий робот <span class="mark">не гортає</span> і не тисне кнопки</h2>
+  <div class="grid g2">
+    <div class="card card--accent" style="--c:var(--bad)">
+      <span class="tag tag--bad">Чому зникають тисячі сторінок</span>
+      <ul>
+        <li>Google <b>переходить за <code>href</code> у тегах <code>&lt;a&gt;</code></b>, а не клікає «Показати ще» і не скролить.</li>
+        <li>Товари, що з'являються <b>лише після скролу через JS</b>, можуть бути <b>не знайдені взагалі</b>.</li>
+        <li><b>Фрагменти <code>#page=2</code> Google ігнорує</b> — для нього це та сама сторінка.</li>
+        <li>Canonical першої сторінки на всю серію = <b>інші сторінки випадають з індексу</b>.</li>
+      </ul>
+    </div>
+    <div class="card card--accent" style="--c:var(--good)">
+      <span class="tag tag--good">Офіційні вимоги Google</span>
+      <ul>
+        <li>Кожній сторінці — <b>унікальний URL</b>: <code>?page=n</code>.</li>
+        <li>Посилання на наступну сторінку — звичайним <b><code>&lt;a href&gt;</code></b>.</li>
+        <li><b>Не</b> ставити першу сторінку як canonical для всіх; кожна — власний canonical.</li>
+        <li>Infinite scroll дублювати <b>серією сторінок, доступних без JavaScript</b> (рекомендація 2014 р.).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Джерела: Google Search Central — «Pagination, incremental page loading, and their impact on Google Search»; «Infinite scroll search-friendly recommendations» (13.02.2014)</div>
+</section>
+
+<!-- 8. Gawker / Twitter -->
+<section class="slide" data-foot="Розділ 2 · SEO та індексація">
+  <div class="kicker">Розділ 2 · Реальні кейси</div>
+  <h2>Ера <span class="mark">#!</span>: коли весь сайт залежав від JavaScript</h2>
+  <div class="grid g3">
+    <div class="card card--accent" style="--c:var(--bad)">
+      <span class="tag tag--bad">Gawker / Lifehacker, 2011</span>
+      <p>Редизайн: усі адреси виду <code>lifehacker.com/#!/…</code>. Коли скрипт впав, <b>сайти тривалий час були порожні</b> — жодного контенту, жодного робочого посилання.</p>
+      <p>Краулери, окрім Googlebot, <b>не бачили контенту</b>.</p>
+    </div>
+    <div class="card card--accent" style="--c:var(--good)">
+      <span class="tag tag--good">Twitter, 2012</span>
+      <p>Відмовився від <code>#!</code> і повернув рендер на сервер.</p>
+      <p><b>Перше завантаження — у 5 разів швидше</b> (до 1/5 попереднього часу). Нова метрика — «time to first tweet».</p>
+    </div>
+    <div class="card card--accent" style="--c:var(--blue)">
+      <span class="tag">Google, 14.10.2015</span>
+      <p>Офіційно <b>відмовляється від своєї AJAX-схеми</b> 2009 року (<code>_escaped_fragment_</code>).</p>
+      <p>Рекомендує прогресивне покращення і <b><code>history.pushState()</code></b> замість <code>#!</code>.</p>
+    </div>
+  </div>
+  <p style="margin-top:28px;font-size:25px"><b>Урок:</b> якщо контент і адреси існують тільки в JavaScript — їх можна втратити разом з органічним трафіком.</p>
+  <div class="src">Джерела: Mike Davies, «Breaking the Web with hash-bangs» (isolani.co.uk, 02.2011); Twitter Engineering «Improving performance on twitter.com» (05.2012); Google «Deprecating our AJAX crawling scheme» (2015)</div>
+</section>
+
+<!-- 9. rel prev/next -->
+<section class="slide" data-foot="Розділ 2 · SEO та індексація">
+  <div class="kicker">Розділ 2 · 2019</div>
+  <h2>rel="prev/next": Google <span class="mark">роками</span> їх ігнорував</h2>
+  <div class="grid g2">
+    <div>
+      <pre><span class="c">&lt;!-- так рекомендували робити з 2011 року --&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"prev"</span> href=<span class="s">"/catalog?page=1"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"next"</span> href=<span class="s">"/catalog?page=3"</span><span class="k">&gt;</span></pre>
+      <p style="margin-top:22px">21 березня 2019 року John Mueller (Google): <b>«We don't use link-rel-next/prev at all»</b>. Не використовували <b>«вже кілька років»</b> — і нікому не сказали. Помилку помітив Gary Illyes.</p>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card card--accent" style="--c:var(--bad)"><span class="tag tag--bad">Проблеми для SEO</span><ul><li>Роки оптимізації під сигнал, якого не було.</li><li>Ще 19 березня Mueller називав теги корисними — <b>фрустрація SEO-спільноти</b>.</li><li>Пагінацію треба будувати так, щоб <b>кожна сторінка була самодостатньою</b>.</li></ul></div>
+      <div class="card card--accent" style="--c:var(--good)"><span class="tag tag--good">Що тепер</span><p>Google вважає сторінки серії <b>окремими сторінками</b>. Теги можна лишити — їх використовують інші пошуковики.</p></div>
+    </div>
+  </div>
+  <div class="src">Джерела: Search Engine Land «Google no longer supports rel=next/prev» та «SEOs frustrated by Google's belated pagination announcement» (03.2019); Google Search Central docs</div>
+</section>
+
+<!-- 10. Shopify -->
+<section class="slide" data-foot="Розділ 3 · Бекенд і бази даних">
+  <div class="kicker">Розділ 3 · Shopify Engineering, 2019</div>
+  <h2>OFFSET на <span class="mark">14 млн</span> товарів: від 6 мс до тайм-ауту</h2>
+  <div class="grid" style="grid-template-columns:1.35fr 1fr;gap:36px">
+    <div class="bars">
+      <div class="row"><span>OFFSET 10</span><div class="track"><div class="fill" style="width:.3%"></div></div><span class="val">6,54 мс</span></div>
+      <div class="row"><span>OFFSET 100</span><div class="track"><div class="fill" style="width:.35%"></div></div><span class="val">7,72 мс</span></div>
+      <div class="row"><span>OFFSET 1 000</span><div class="track"><div class="fill" style="width:.4%"></div></div><span class="val">8,46 мс</span></div>
+      <div class="row"><span>OFFSET 10 000</span><div class="track"><div class="fill" style="width:3.6%"></div></div><span class="val">79,82 мс</span></div>
+      <div class="row"><span>OFFSET 100 000</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="val">2 221,6 мс</span></div>
+      <div class="row"><span>OFFSET 1 000 000</span><div class="track"><div class="fill" style="width:100%;background:repeating-linear-gradient(45deg,var(--bad),var(--bad) 10px,transparent 10px,transparent 20px)"></div></div><span class="val">тайм-аут</span></div>
+      <div class="row"><span>Курсор (last id)</span><div class="track"><div class="fill ok" style="width:.25%"></div></div><span class="val" style="color:var(--good)">≈5–6 мс</span></div>
+    </div>
+    <div>
+      <ul>
+        <li>Запит <code>page=25&amp;limit=100</code> змушує БД <b>прочитати 2 500 рядків і викинути 2 400</b>.</li>
+        <li>Повільні запити <b>займають усі з'єднання</b> — падають навіть швидкі запити <b>інших магазинів</b> на тому ж сервері.</li>
+        <li>Курсор на OFFSET 100 000: <b>у 400+ разів швидше</b> (−99,76%).</li>
+        <li>У реальному API <code>/admin/products.json</code> — <b>≈11× швидше</b>; підтримку <code>page</code> прибрали з усіх ендпоінтів до липня 2020.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Джерело: Drew Martin, «Pagination with Relative Cursors», Shopify Engineering, 12.08.2019 (середнє з 5 запусків)</div>
+</section>
+
+<!-- ДЕМО: OFFSET vs курсор -->
+<section class="slide" data-foot="Інтерактивне демо">
+  <div class="kicker">Демо · Як далеко ви гортаєте?</div>
+  <h2>Обери сторінку — і подивись, скільки працює <span class="mark">база</span></h2>
+  <div class="demo">
+    <div class="demo-ctl" id="d2-btns"></div>
+    <div class="meter"><span><b>OFFSET</b></span><div class="track"><div class="fill" id="d2-off" style="background:var(--bad)"></div></div><span class="demo-out" id="d2-off-t"></span></div>
+    <div class="meter"><span><b>Курсор</b></span><div class="track"><div class="fill" id="d2-cur" style="background:var(--good)"></div></div><span class="demo-out" id="d2-cur-t"></span></div>
+    <div class="grid g3" style="margin-top:18px">
+      <div class="card"><p style="font-size:18px">Рядків, які база <b>перебирає</b> з OFFSET:</p><p class="demo-out" style="font-size:30px;color:var(--bad);font-weight:800" id="d2-rows-off"></p></div>
+      <div class="card"><p style="font-size:18px">Рядків, які база <b>перебирає</b> з курсором:</p><p class="demo-out" style="font-size:30px;color:var(--good);font-weight:800" id="d2-rows-cur"></p></div>
+      <div class="card"><p style="font-size:18px" id="d2-note"></p></div>
+    </div>
+  </div>
+  <div class="src">Час — реальні заміри Shopify Engineering (14 млн товарів, сторінки по 100, середнє з 5 запусків). Кількість рядків — пояснення принципу.</div>
+</section>
+
+<!-- 11. SQL -->
+<section class="slide" data-foot="Розділ 3 · Бекенд і бази даних">
+  <div class="kicker">Розділ 3 · Чому OFFSET повільний</div>
+  <h2>OFFSET <span class="mark">рахує</span>, курсор <span class="mark">шукає</span></h2>
+  <div class="grid g2">
+    <div>
+      <span class="tag tag--bad">OFFSET — O(offset + limit)</span>
+      <pre><span class="c">-- сторінка 50 001 по 20 записів</span>
+<span class="k">SELECT</span> id, title, created_at
+  <span class="k">FROM</span> posts
+ <span class="k">ORDER BY</span> created_at <span class="k">DESC</span>, id <span class="k">DESC</span>
+ <span class="k">LIMIT</span> <span class="n">20</span> <span class="k">OFFSET</span> <span class="n">1000000</span>;
+<span class="c">-- БД прочитає і відсортує 1 000 020 рядків,
+-- щоб віддати останні 20</span></pre>
+    </div>
+    <div>
+      <span class="tag tag--good">Keyset / cursor — O(log n + limit)</span>
+      <pre><span class="c">-- клієнт пам'ятає останній запис сторінки</span>
+<span class="k">SELECT</span> id, title, created_at
+  <span class="k">FROM</span> posts
+ <span class="k">WHERE</span> (created_at, id) &lt; (<span class="s">:last_created</span>, <span class="s">:last_id</span>)
+ <span class="k">ORDER BY</span> created_at <span class="k">DESC</span>, id <span class="k">DESC</span>
+ <span class="k">LIMIT</span> <span class="n">20</span>;
+<span class="c">-- індекс (created_at, id) → одразу в потрібне місце</span></pre>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:24px">
+    <div class="card"><p><b>Чому так:</b> OFFSET передає лише <b>кількість</b> рядків, тож база мусить їх <b>реально прочитати</b> й упорядкувати (Markus Winand, «use-the-index-luke»).</p></div>
+    <div class="card"><p><b>Другий ключ</b> (<code>id</code>) обов'язковий: сортування лише за неунікальним полем <b>губить записи</b> (Shopify).</p></div>
+    <div class="card"><p><b>Ціна курсора:</b> немає «загальної кількості сторінок» і переходу на довільну сторінку (Slack).</p></div>
+  </div>
+  <div class="src">Приклад SQL — ілюстрація автора за методом keyset/seek (Markus Winand, use-the-index-luke.com/no-offset; синтаксис row values — PostgreSQL)</div>
+</section>
+
+<!-- 12. Data drift -->
+<section class="slide" data-foot="Розділ 3 · Бекенд і бази даних">
+  <div class="kicker">Розділ 3 · Зміщення даних (data drift)</div>
+  <h2>Новий пост → <span class="mark">дублікат</span> на 2-й сторінці</h2>
+  <div class="drift">
+    <div class="card">
+      <h3>OFFSET: сторінки по 5</h3>
+      <p style="margin-bottom:8px">Сторінка 1 (OFFSET 0):</p>
+      <div class="feed"><i class="pg">10</i><i class="pg">9</i><i class="pg">8</i><i class="pg">7</i><i class="pg">6</i></div>
+      <p style="margin:14px 0 8px">Тим часом з'явився пост <b>11</b>. Сторінка 2 (OFFSET 5):</p>
+      <div class="feed"><i class="dup">6</i><i>5</i><i>4</i><i>3</i><i>2</i></div>
+      <p style="margin-top:12px"><b style="color:var(--bad)">Пост 6 показано двічі.</b> При видаленні — навпаки, запис <b>пропускається</b>.</p>
+    </div>
+    <div class="card">
+      <h3>Курсор: «все, що старше за 6»</h3>
+      <p style="margin-bottom:8px">Сторінка 1:</p>
+      <div class="feed"><i class="pg">10</i><i class="pg">9</i><i class="pg">8</i><i class="pg">7</i><i class="pg">6</i></div>
+      <p style="margin:14px 0 8px">З'явився пост <b>11</b> — неважливо. Сторінка 2 (<code>id &lt; 6</code>):</p>
+      <div class="feed"><i>5</i><i>4</i><i>3</i><i>2</i><i>1</i></div>
+      <p style="margin-top:12px"><b style="color:var(--good)">Без дублікатів і пропусків.</b> Нове підтягується окремо: <code>since_id</code>.</p>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:22px">
+    <p><b>Slack Engineering (2017):</b> при частих записах «вікно сторінки стає ненадійним» — у каналі нові повідомлення змушують 2-гу сторінку <b>повторювати першу</b>. Рішення — непрозорий <code>cursor</code> + <code>next_cursor</code>.</p>
+    <p><b>Twitter API:</b> стрічки «постійно отримують нові твіти на початок», тож звичайна посторінкова навігація «не завжди ефективна» — замість сторінок <code>max_id</code> і <code>since_id</code>.</p>
+  </div>
+  <div class="src">Джерела: Michael Hahn, «Evolving API Pagination at Slack», 15.08.2017; X/Twitter Developer — «Working with timelines» (API v1.1)</div>
+</section>
+
+<!-- 13. GitHub -->
+<section class="slide" data-foot="Розділ 3 · Бекенд і бази даних">
+  <div class="kicker">Розділ 3 · Коли глибокі сторінки просто забороняють</div>
+  <h2>GitHub: <span class="mark">422</span> замість 459-ї сторінки</h2>
+  <pre style="font-size:20px"><span class="k">GET</span> https://api.github.com/repos/nodejs/node/issues?state=all&amp;per_page=<span class="n">100</span>&amp;page=<span class="n">459</span>
+
+<span class="n">422</span> — <span class="s">Pagination with the page parameter is not supported for large datasets,
+      please use cursor based pagination (after/before)</span></pre>
+  <div class="case" style="margin-top:28px">
+    <div><div class="lbl">Компанія</div><div class="who">GitHub REST API</div><p style="margin-top:10px">Зафіксовано в задачі GitLab; <b>повторено автором 13.11.2026</b> — та сама відповідь 422</p></div>
+    <div><div class="lbl">Чому 422</div><p>459-та сторінка по 100 = <b>пропустити 45 800 записів</b> (OFFSET). GitHub захищає базу: глибокі сторінки <b>заборонено</b>. Код 422 = «запит зрозумілий, але виконувати його не будемо».</p></div>
+    <div class="hurt"><div class="lbl">Наслідки</div><p>Клієнти, що будували URL з <code>page=N</code>, <b>ламаються</b> — імпорт GitLab падав і потребував виправлення.</p></div>
+    <div class="fix"><div class="lbl">Як вирішили</div><p>Курсори <code>after</code>/<code>before</code> — «дай записи <b>після</b> цього» (закладка, а не номер сторінки). Готові адреси наступної сторінки — у заголовку <code>Link</code>.</p></div>
+  </div>
+  <div class="src">Джерела: GitLab issue #548950 / MR !196625 «Fix GitHub Import stage pagination»; GitHub Docs «Using pagination in the REST API»</div>
+</section>
+
+<!-- Rozetka наживо -->
+<section class="slide" data-foot="Розділ 4 · Як це пофіксили лідери">
+  <div class="kicker">Розділ 4 · Rozetka наживо</div>
+  <h2>Кнопка <span class="mark">і</span> сторінки одночасно — навіщо?</h2>
+  <div class="grid g2" style="gap:26px">
+    <figure class="shot" style="margin:0">
+      <div class="shot__bar"><i></i><i></i><i></i><span>rozetka.com.ua/ua/notebooks/c80004/</span></div>
+      <img src="img/rozetka-load-more.png" alt="Rozetka: кнопка Показати ще і сторінки 1 2 3 4 … 100" style="height:330px;object-fit:cover;object-position:50% 52%">
+      <figcaption><span class="callout">До</span> «Показати ще» + сторінки 1 · 2 · 3 · 4 … 100</figcaption>
+    </figure>
+    <figure class="shot" style="margin:0">
+      <div class="shot__bar"><i></i><i></i><i></i><span>rozetka.com.ua/ua/notebooks/c80004/<b style="color:var(--bad)">page=2/</b></span></div>
+      <img src="img/rozetka-page2.jpg" alt="Rozetka після натискання: активна сторінка 2, внизу видно футер" style="height:330px;object-fit:cover;object-position:50% 40%">
+      <figcaption><span class="callout">Після</span> адреса <b>/page=2/</b>, заголовок «Сторінка 2», внизу — футер</figcaption>
+    </figure>
+  </div>
+  <div class="grid g4" style="margin-top:20px">
+    <div class="card card--accent" style="--c:var(--blue)"><p><b>Людині</b> — «Показати ще»: товари додаються без перезавантаження.</p></div>
+    <div class="card card--accent" style="--c:var(--blue)"><p><b>«Назад» і посилання</b> працюють, бо адреса стала <code>/page=2/</code>.</p></div>
+    <div class="card card--accent" style="--c:var(--good)"><p><b>Google</b> бачить сторінки 2 … 100 як звичайні посилання <code>&lt;a href&gt;</code>.</p></div>
+    <div class="card card--accent" style="--c:var(--good)"><p><b>Футер досяжний</b>: нове вантажиться лише після кліку.</p></div>
+  </div>
+  <div class="src">Знімки та перевірка автора у звичайному браузері, rozetka.com.ua, 13.11.2026</div>
+</section>
+
+<!-- 14. Гібрид -->
+<section class="slide" data-foot="Розділ 4 · Як це пофіксили лідери">
+  <div class="kicker">Розділ 4 · Гібридні рішення</div>
+  <h2>«Показати ще» + <span class="mark">URL у History API</span></h2>
+  <div class="grid g3">
+    <div class="card card--accent" style="--c:var(--good)">
+      <span class="tag tag--good">Rozetka</span>
+      <p>У каталозі <b>одночасно</b> кнопка «Показати ще» і нумеровані сторінки — звичайні <code>&lt;a href="…/page=2/"&gt;</code> для роботів.</p>
+      <p>Після «Показати ще» адреса стає <b><code>/page=2/</code></b>, заголовок — «Сторінка 2» → «Назад» і посилання працюють.</p>
+      <p style="font-size:15px;color:var(--ink-3)">Перевірено автором на rozetka.com.ua/ua/notebooks, 13.11.2026</p>
+    </div>
+    <div class="card card--accent" style="--c:var(--good)">
+      <span class="tag tag--good">Google Search, 2024</span>
+      <p>Десктоп — кнопка <b>«Далі»</b>, мобільні — <b>«Інші результати»</b>.</p>
+      <p>Результати вантажаться <b>лише коли людина попросила</b> — швидша видача.</p>
+    </div>
+    <div class="card card--accent" style="--c:var(--good)">
+      <span class="tag tag--good">Baymard: еталон</span>
+      <p>Кожне «Load more» оновлює URL через <b><code>history.pushState()</code></b>, тож «Назад» повертає на те саме місце (приклад — Skechers).</p>
+      <p>Поріг: «Load more» після <b>50–100</b> товарів, щоб <b>футер був досяжний</b>.</p>
+    </div>
+  </div>
+  <pre style="margin-top:24px;font-size:18px"><span class="c">// мінімальна схема гібриду</span>
+button.onclick = <span class="k">async</span> () =&gt; {
+  <span class="k">const</span> { items, nextCursor, page } = <span class="k">await</span> fetch(<span class="s">`/api/products?cursor=${cursor}`</span>).then(r =&gt; r.json());
+  list.append(...items.map(render));  cursor = nextCursor;
+  history.pushState({ cursor }, <span class="s">''</span>, <span class="s">`?page=${page}`</span>);   <span class="c">// «Назад» і поширення посилань працюють</span>
+};</pre>
+  <div class="src">Джерела: власна перевірка rozetka.com.ua; Search Engine Land (06.2024); Baymard Institute / Smashing Magazine (2016)</div>
+</section>
+
+<!-- 15. Віртуалізація -->
+<section class="slide" data-foot="Розділ 4 · Як це пофіксили лідери">
+  <div class="kicker">Розділ 4 · Продуктивність браузера</div>
+  <h2>Віртуалізація: у DOM <span class="mark">лише видиме</span></h2>
+  <div class="grid g2">
+    <div>
+      <p style="font-size:25px"><b>Проблема:</b> нескінченний скрол сам по собі не рятує — <b>DOM росте з кожним екраном</b>, сповільнюються розрахунок стилів і зміни DOM (web.dev).</p>
+      <p style="font-size:25px"><b>Рішення:</b> тримати в сторінці невелике «вікно» елементів; ті, що вийшли за межі, <b>перевикористовуються</b>. Кількість вузлів залежить від розміру вікна, а не від довжини списку.</p>
+      <p>Бібліотеки: <code>react-window</code>, TanStack Virtual (FixedSizeList, VariableSizeList, сітки).</p>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="case" style="grid-template-columns:1fr">
+        <div><div class="lbl">Twitter Lite (PWA), 2017</div><p>Власний віртуалізований список: малює <b>тільки вміст у вікні перегляду</b>, додає елементи поступово через <code>requestAnimationFrame</code> і <b>зберігає позицію скролу</b> між екранами.</p></div>
+        <div class="fix"><div class="lbl">Результат (кейс web.dev)</div><p><b>−50%</b> часу до інтерактивності та <b>−30%</b> середнього часу завантаження для залогінених користувачів.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="src">Джерела: Twitter Engineering «How we built Twitter Lite» (2017); web.dev — Twitter Lite case study; web.dev «Virtualize large lists with react-window»</div>
+</section>
+
+<!-- ДЕМО: DOM і віртуалізація -->
+<section class="slide" data-foot="Інтерактивне демо">
+  <div class="kicker">Демо · Живий лічильник DOM</div>
+  <h2>10 000 товарів: <span class="mark">звичайний</span> список проти віртуального</h2>
+  <div class="grid g2" style="gap:26px">
+    <div class="demo">
+      <h3>Звичайний нескінченний список</h3>
+      <div class="demo-ctl"><button type="button" class="dbtn--yellow" id="d3-add">Прогорнути ще 1 000</button><button type="button" id="d3-reset">Скинути</button></div>
+      <div class="dom-box" id="d3-plain"></div>
+      <div class="dom-count" style="margin-top:12px"><b id="d3-plain-n" style="color:var(--bad)">0</b><span>елементів у DOM прямо зараз</span></div>
+    </div>
+    <div class="demo">
+      <h3>Віртуалізований список (усі 10 000)</h3>
+      <div class="demo-ctl"><button type="button" id="d3-jump">Стрибнути в середину</button><span class="demo-out" style="align-self:center">гортайте мишкою ↓</span></div>
+      <div class="dom-box" id="d3-virt"><div id="d3-virt-inner" style="position:relative"></div></div>
+      <div class="dom-count" style="margin-top:12px"><b id="d3-virt-n" style="color:var(--good)">0</b><span>елементів у DOM — завжди однаково мало</span></div>
+    </div>
+  </div>
+  <div class="src">Лічильники рахують реальні DOM-вузли на цій сторінці. Принцип — web.dev «Virtualize large lists with react-window».</div>
+</section>
+
+<!-- 16. Висновки -->
+<section class="slide" data-foot="Висновки">
+  <div class="kicker">Висновки</div>
+  <h2>Як робити пагінацію <span class="mark">у 2026 році</span></h2>
+  <div class="grid g2">
+    <div class="card card--accent" style="--c:var(--blue)">
+      <h3>Фронтенд і UX</h3>
+      <ul>
+        <li>Каталоги й пошук — <b>«Показати ще» або сторінки</b>, не безкінечний скрол.</li>
+        <li>Кожна порція — <b>свій URL</b> через <code>pushState</code>; «Назад» повертає на місце.</li>
+        <li><b>Футер досяжний</b>: автопідвантаження з порогом.</li>
+        <li>Довгі списки — <b>віртуалізація</b>.</li>
+      </ul>
+    </div>
+    <div class="card card--accent" style="--c:var(--good)">
+      <h3>SEO і бекенд</h3>
+      <ul>
+        <li><code>?page=n</code> + <b><code>&lt;a href&gt;</code></b> на наступну сторінку, власний canonical.</li>
+        <li><b>Не покладатись</b> на rel="prev/next" і <code>#</code>-фрагменти.</li>
+        <li>API — <b>курсор (keyset)</b> з унікальним другим ключем і індексом.</li>
+        <li>OFFSET — лише для малих таблиць і перших сторінок.</li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:28px;font-size:26px"><b>Головне:</b> найкращі рішення — гібридні. Людині — зручна кнопка, роботу — посилання, базі — курсор, браузеру — віртуалізація.</p>
+</section>
+
+<!-- 17. Джерела -->
+<section class="slide" data-foot="Джерела">
+  <div class="kicker">Список джерел</div>
+  <h2 style="font-size:42px;margin-bottom:18px">Усі факти — з першоджерел</h2>
+  <div class="grid g2" style="gap:6px 40px">
+    <ol style="font-size:15.5px;margin:0;padding-left:22px;line-height:1.4;color:var(--ink-2)">
+      <li>Dan McKinley — Design for Continuous Experimentation (Etsy). mcfunley.com/continuous-experimentation</li>
+      <li>Baymard Institute — Infinite Scrolling, Pagination Or "Load More" Buttons? Smashing Magazine, 2016</li>
+      <li>Hoa Loranger — Infinite Scrolling Is Not for Every Website. NN/g, 2014. nngroup.com/articles/infinite-scrolling</li>
+      <li>9to5Google — Google Search continuous scrolling (mobile), 14.10.2021</li>
+      <li>Search Engine Land — Google brings continuous scroll to desktop search results, 12.2022</li>
+      <li>Search Engine Land / Android Authority — Google ends continuous scroll, 06.2024</li>
+      <li>Google Search Central — Pagination, incremental page loading, and their impact on Google Search</li>
+      <li>Google Search Central Blog — Infinite scroll search-friendly recommendations, 13.02.2014</li>
+      <li>Google Search Central Blog — Deprecating our AJAX crawling scheme, 14.10.2015</li>
+    </ol>
+    <ol start="10" style="font-size:15.5px;margin:0;padding-left:28px;line-height:1.4;color:var(--ink-2)">
+      <li>Mike Davies — Breaking the Web with hash-bangs. isolani.co.uk, 02.2011</li>
+      <li>Twitter Engineering — Improving performance on twitter.com, 05.2012</li>
+      <li>Search Engine Land — Google no longer supports rel=next/prev; SEOs frustrated…, 03.2019</li>
+      <li>Drew Martin — Pagination with Relative Cursors. Shopify Engineering, 12.08.2019</li>
+      <li>Michael Hahn — Evolving API Pagination at Slack. slack.engineering, 2017</li>
+      <li>Markus Winand — We need tool support for keyset pagination. use-the-index-luke.com/no-offset</li>
+      <li>X/Twitter Developer — Working with timelines (API v1.1)</li>
+      <li>GitLab issue #548950 — GitHub import: 422 on page parameter; GitHub Docs — Using pagination in the REST API</li>
+      <li>Twitter Engineering — How we built Twitter Lite, 2017; web.dev — Twitter Lite case study</li>
+      <li>web.dev — Virtualize large lists with react-window</li>
+      <li>Власні знімки й перевірки автора, 13.11.2026: Rozetka, Google, GitHub API (422)</li>
+    </ol>
+  </div>
+</section>
+
+</div></div>
+<div class="bar" id="bar"></div>
+<div class="num" id="num"></div>
+
+<script>
+(() => {
+  const slides = [...document.querySelectorAll('.slide')];
+  const deck = document.getElementById('deck');
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+
+  const fit = () => {
+    const s = Math.min(innerWidth / 1600, innerHeight / 900);
+    deck.style.setProperty('--s', s);
+  };
+  const show = (n) => {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => { s.classList.toggle('is-active', k === i); s.classList.toggle('is-prev', k < i); });
+    document.getElementById('num').textContent = `${i + 1} / ${slides.length}`;
+    document.getElementById('bar').style.width = `${((i + 1) / slides.length) * 100}%`;
+    history.replaceState(null, '', `#${i + 1}`);
+  };
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('deck-theme', root.dataset.theme); } catch (e) {}
+  };
+
+  addEventListener('resize', fit);
+  addEventListener('keydown', (e) => {
+    if ((e.key === ' ' || e.key === 'Enter') && e.target.closest('button, a')) return; // кнопки демо
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 't') toggleTheme();
+    else if (e.key.toLowerCase() === 'p') print();
+  });
+  document.getElementById('next').onclick = () => show(i + 1);
+  document.getElementById('prev').onclick = () => show(i - 1);
+  document.getElementById('theme').onclick = toggleTheme;
+  let x0 = null;
+  addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) show(i + (dx < 0 ? 1 : -1)); x0 = null; });
+
+  fit(); show(i);
+})();
+</script>
+
+<script>
+/* ================= ІНТЕРАКТИВНІ ДЕМО ================= */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* ---------- Демо 1: три способи показати каталог ---------- */
+  const PER = 20, TOTAL = 300, TARGET = 87;
+  const scroll = $('d1-scroll'), url = $('d1-url'), log = $('d1-log');
+  const st = { mode: 'pages', page: 1, loaded: PER };
+  const item = (n) => `<div class="p-item${n === TARGET ? ' hl' : ''}" data-n="${n}"><i></i><span>Ноутбук №${n}<br><b>${(18000 + n * 137).toLocaleString('uk-UA')} ₴</b></span></div>`;
+  const pagesBar = (cur) => `<div class="p-pages">${[1, 2, 3, 4, 5, '…', 15].map((p) => `<span class="${p === cur ? 'on' : ''}" data-p="${p}">${p}</span>`).join('')}</div>`;
+  const footer = '<div class="p-foot"><b>Футер</b><br>Доставка · Оплата · Повернення · Контакти</div>';
+  const say = (...lines) => { log.innerHTML = lines.map((l) => `<li>${l}</li>`).join(''); };
+
+  function render() {
+    let h = '<div style="height:24px"></div>';
+    if (st.mode === 'pages') {
+      const from = (st.page - 1) * PER + 1;
+      for (let n = from; n < from + PER; n++) h += item(n);
+      h += pagesBar(st.page) + footer;
+      url.textContent = `shop.ua/catalog?page=${st.page}`;
+    } else if (st.mode === 'infinite') {
+      for (let n = 1; n <= st.loaded; n++) h += item(n);
+      h += '<div class="p-loading">⏳ завантаження наступних…</div>';
+      url.textContent = 'shop.ua/catalog';
+    } else {
+      for (let n = 1; n <= st.loaded; n++) h += item(n);
+      const page = st.loaded / PER;
+      h += '<button class="p-more" type="button">Показати ще</button>' + pagesBar(page) + footer;
+      url.textContent = `shop.ua/catalog?page=${page}`;
+    }
+    scroll.innerHTML = h;
+  }
+  const scrollToItem = (n) => { const el = scroll.querySelector(`[data-n="${n}"]`); if (el) scroll.scrollTop = el.offsetTop - 120; };
+
+  $('d1-modes').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    $('d1-modes').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    Object.assign(st, { mode: b.dataset.mode, page: 1, loaded: PER });
+    scroll.style.scrollBehavior = 'auto'; render(); scroll.scrollTop = 0; scroll.style.scrollBehavior = '';
+    say({ pages: 'Класика: кожна сторінка — своя адреса <code>?page=N</code>.', infinite: 'Нескінченний скрол: товари довантажуються самі, адреса не змінюється.', hybrid: 'Гібрид: товари додаються кнопкою, а адреса оновлюється через <code>pushState</code>.' }[st.mode]);
+  });
+
+  $('d1-deep').onclick = () => {
+    if (st.mode === 'pages') { st.page = 5; render(); scrollToItem(TARGET); say('Перейшли на сторінку 5 — тут товар <b>№87</b> (підсвічений жовтим).'); }
+    else { st.loaded = 100; render(); scrollToItem(TARGET); say(st.mode === 'infinite' ? 'Прогорнули 100 товарів. Знайшли <b>№87</b>. Адреса досі <code>/catalog</code>.' : 'Натиснули «Показати ще» 4 рази. Адреса — <code>?page=5</code>. Знайшли <b>№87</b>.'); }
+  };
+
+  $('d1-open').onclick = async () => {
+    say('Відкриваємо товар №87…');
+    scroll.innerHTML = '<div style="padding:60px 16px;text-align:center;color:#0e1a33"><b style="font-size:20px">Ноутбук №87</b><br><br>Сторінка товару<br><br>← «Назад»</div>';
+    await wait(1100);
+    if (st.mode === 'infinite') {
+      st.loaded = PER; render(); scroll.scrollTop = 0;
+      say('Відкрили товар №87, натиснули «Назад»…', '<b style="color:var(--bad)">❌ Стрічка почалась з початку.</b> Адреса не пам\'ятала, скільки товарів було завантажено — №87 доведеться шукати знову (pogo-sticking).');
+    } else {
+      if (st.mode === 'pages') st.page = 5; else st.loaded = 100;
+      render(); scrollToItem(TARGET);
+      say('Відкрили товар №87, натиснули «Назад»…', `<b style="color:var(--good)">✅ Повернулись на те саме місце</b> — адреса <code>${url.textContent.replace('shop.ua', '')}</code> підказала, що показати.`);
+    }
+  };
+
+  $('d1-footer').onclick = async () => {
+    if (st.mode !== 'infinite') {
+      scroll.scrollTop = scroll.scrollHeight;
+      say(`<b style="color:var(--good)">✅ Футер на місці</b> — нові товари вантажаться лише ${st.mode === 'pages' ? 'на іншій сторінці' : 'після кліку'}.`);
+      return;
+    }
+    say('Гортаємо до футера…');
+    for (let k = 0; k < 3; k++) {
+      scroll.scrollTop = scroll.scrollHeight; await wait(700);
+      st.loaded = Math.min(TOTAL, st.loaded + PER); const top = scroll.scrollTop; render(); scroll.scrollTop = top; await wait(500);
+    }
+    say('Гортаємо до футера…', '<b style="color:var(--bad)">❌ Футер «тікає»:</b> щойно доходимо до низу, довантажуються нові товари. «Доставка» і «Контакти» недосяжні.');
+  };
+  /* Кліки всередині «телефона»: номери сторінок і «Показати ще» */
+  scroll.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-p]');
+    if (p && st.mode === 'pages' && /^\d+$/.test(p.dataset.p)) { st.page = +p.dataset.p; render(); scroll.scrollTop = 0; say(`Сторінка ${st.page}: адреса стала <code>?page=${st.page}</code>.`); }
+    if (e.target.closest('.p-more') && st.loaded < TOTAL) {
+      const top = scroll.scrollTop; st.loaded += PER; render(); scroll.scrollTop = top;
+      say(`«Показати ще» → ${st.loaded} товарів, адреса <code>?page=${st.loaded / PER}</code>, футер нікуди не втік.`);
+    }
+  });
+  /* Нескінченний режим: автодовантаження при наближенні до низу */
+  scroll.addEventListener('scroll', () => {
+    if (st.mode !== 'infinite' || st.loaded >= TOTAL) return;
+    if (scroll.scrollTop + scroll.clientHeight > scroll.scrollHeight - 40) {
+      const top = scroll.scrollTop; st.loaded += PER; render(); scroll.scrollTop = top;
+    }
+  }, { passive: true });
+  render();
+
+  /* ---------- Демо 2: OFFSET проти курсора (заміри Shopify) ---------- */
+  const DATA = [
+    { off: 10, t: 6.54, c: 5.32 }, { off: 100, t: 7.72, c: 5.78 }, { off: 1000, t: 8.46, c: 5.76 },
+    { off: 10000, t: 79.82, c: 6.04 }, { off: 100000, t: 2221.6, c: 5.24 }, { off: 1000000, t: null, c: null }
+  ];
+  const fmt = (n) => n.toLocaleString('uk-UA');
+  const btns = $('d2-btns');
+  btns.innerHTML = DATA.map((d, k) => `<button type="button" data-k="${k}" aria-pressed="false">OFFSET ${fmt(d.off)}</button>`).join('');
+  function pick(k) {
+    const d = DATA[k];
+    btns.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', +b.dataset.k === k));
+    const off = $('d2-off');
+    off.style.width = d.t === null ? '100%' : Math.max(0.6, (d.t / 2221.6) * 100) + '%';
+    off.style.background = d.t === null ? 'repeating-linear-gradient(45deg,var(--bad),var(--bad) 10px,transparent 10px,transparent 20px)' : 'var(--bad)';
+    $('d2-off-t').textContent = d.t === null ? 'тайм-аут' : `${String(d.t).replace('.', ',')} мс`;
+    $('d2-cur').style.width = '0.6%';
+    $('d2-cur-t').textContent = d.c === null ? '≈ як на 1-й сторінці*' : `${String(d.c).replace('.', ',')} мс`;
+    $('d2-rows-off').textContent = fmt(d.off + 100);
+    $('d2-rows-cur').textContent = '100';
+    $('d2-note').innerHTML = d.t === null
+      ? '<b>Мільйон</b> — запит з OFFSET у Shopify <b>стабільно падав по тайм-ауту</b>. *Для курсора на такій глибині окремого заміру немає, але принцип той самий: стрибок за індексом.'
+      : d.off >= 10000
+        ? `Тут OFFSET уже в <b>${Math.round(d.t / d.c)} разів</b> повільніший. Повільні запити займають з'єднання з базою — страждають і інші користувачі.`
+        : 'На перших сторінках різниці майже немає — тому OFFSET так довго всіх влаштовував.';
+  }
+  btns.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) pick(+b.dataset.k); });
+  pick(4);
+
+  /* ---------- Демо 3: живий лічильник DOM ---------- */
+  const plain = $('d3-plain'), virt = $('d3-virt'), inner = $('d3-virt-inner');
+  const ROW = 34, N = 10000;
+  const row = (n) => `<div class="dom-row"><span>Товар №${n}</span>&nbsp;·&nbsp;<b>${fmt(15000 + n * 9)} ₴</b></div>`;
+  const countPlain = () => { $('d3-plain-n').textContent = fmt(plain.querySelectorAll('*').length); };
+  let added = 0;
+  function addPlain(k) {
+    if (added >= N) return;
+    let h = '';
+    for (let n = added + 1; n <= Math.min(N, added + k); n++) h += row(n);
+    plain.insertAdjacentHTML('beforeend', h); added = Math.min(N, added + k);
+    plain.scrollTop = plain.scrollHeight; countPlain();
+  }
+  $('d3-add').onclick = () => addPlain(1000);
+  $('d3-reset').onclick = () => { plain.innerHTML = ''; added = 0; countPlain(); };
+
+  inner.style.height = N * ROW + 'px';
+  function renderVirt() {
+    const first = Math.max(0, Math.floor(virt.scrollTop / ROW) - 4);
+    const last = Math.min(N, first + Math.ceil(virt.clientHeight / ROW) + 8);
+    let h = '';
+    for (let n = first; n < last; n++) h += `<div class="dom-row" style="position:absolute;left:0;right:0;top:${n * ROW}px"><span>Товар №${n + 1}</span>&nbsp;·&nbsp;<b>${fmt(15000 + (n + 1) * 9)} ₴</b></div>`;
+    inner.innerHTML = h;
+    $('d3-virt-n').textContent = fmt(virt.querySelectorAll('*').length);
+  }
+  virt.addEventListener('scroll', renderVirt, { passive: true });
+  $('d3-jump').onclick = () => { virt.scrollTop = (N / 2) * ROW; };
+  addPlain(1000); renderVirt();
+})();
+</script>
+</body>
+</html>
