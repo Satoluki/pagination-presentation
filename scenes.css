@@ -131,10 +131,10 @@
 .shelf-meter { position: absolute; right: 30px; font: 700 18px var(--mono); }
 
 /* Індекс */
-.track { position: absolute; left: 40px; right: 40px; height: 34px; border-radius: 10px; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 9px), var(--hover); }
-.track .win { position: absolute; top: -4px; bottom: -4px; border-radius: 10px; border: 3px solid var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); transition: left .35s ease, width .35s ease; }
-.track .scan { position: absolute; top: -6px; bottom: -6px; width: 4px; background: var(--bad); border-radius: 2px; }
-.track .goal { position: absolute; top: -12px; bottom: -12px; width: 4px; background: #ffd200; border-radius: 2px; }
+.scene-stage .track { position: absolute; left: 40px; right: 40px; height: 34px; border-radius: 10px; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 9px), var(--hover); }
+.scene-stage .track .win { position: absolute; top: -4px; bottom: -4px; border-radius: 10px; border: 3px solid var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); transition: left .35s ease, width .35s ease; }
+.scene-stage .track .scan { position: absolute; top: -6px; bottom: -6px; width: 4px; background: var(--bad); border-radius: 2px; }
+.scene-stage .track .goal { position: absolute; top: -12px; bottom: -12px; width: 4px; background: #ffd200; border-radius: 2px; }
 .trk-lbl { position: absolute; left: 40px; font-size: 18px; font-weight: 800; }
 .trk-meter { position: absolute; right: 40px; font: 700 18px var(--mono); }
 .steps-log { position: absolute; left: 40px; right: 40px; font: 13.5px var(--mono); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 6px; }
@@ -206,3 +206,6 @@
 /* --- Логотипи й пометки «хто це» --- */
 .logo-etsy { font-family: Georgia, 'Times New Roman', serif; font-size: 44px; font-weight: 700; color: #f1641e; letter-spacing: -.01em; }
 .who-note { margin: -16px 0 18px; font-size: 18.5px; color: var(--ink-2); }
+
+/* перемотка кроків: без переходів, кадр ставиться миттєво */
+.scene.is-fast .scene-stage, .scene.is-fast .scene-stage * { transition: none !important; }

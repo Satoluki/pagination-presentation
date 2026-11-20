@@ -4,32 +4,70 @@
    ===================================================================== */
 window.EXTRA_SCENES = ({ mb, card, cat, srv }) => ({
 
-  /* NN/g: де нескінченний скрол доречний, а де ні */
+  /* NN/g: стрічка соцмережі (стиль Instagram) — так; каталог, де шукаєш конкретне, — ні */
   async nng(c) {
     const { W, H } = c;
-    const pw = Math.round((W - 54) / 2);
-    const post = (k) => `<div class="m-post"><i></i><div><b>@friend_${k}</b><span>фото з відпочинку · ${k * 7} ♥</span></div></div>`;
+    const pw = Math.round((W - 54) / 2), top = 38, ph = H - top - 44, x2 = pw + 36;
+    const EMO = ['🏖️', '🍕', '🐶', '🏔️', '🎸', '🌅', '🐱', '⚽', '🍦', '🚲', '🎡', '🌵'];
+    const NAMES = ['oksana.trip', 'max_vn', 'dog.life', 'hiker_ua', 'band.live', 'sea.view', 'cat.daily', 'fc.vinnytsia', 'sweet.ice', 'bike.ua', 'kyiv.fun', 'desert.go'];
+    const post = (k) => `<div class="ig-post"><div class="ig-h"><i></i><b>${NAMES[k % 12]}</b><span>•••</span></div>
+      <div class="ig-img" style="--h:${(k * 53) % 360}deg">${EMO[k % 12]}</div>
+      <div class="ig-act"><span class="ig-heart">♡</span><span>💬</span><span>➤</span><span class="ig-save">🔖</span></div>
+      <div class="ig-likes">${(1200 + k * 317).toLocaleString('uk-UA')} вподобань</div></div>`;
+    const PH = 236; // висота поста
     c.st.innerHTML = `
-      <div class="mb-label" style="left:18px;top:10px">Стрічка соцмережі</div>
-      <div class="mb-label" style="left:${pw + 36}px;top:10px">Каталог: шукаю «Ноутбук №87»</div>
-      <div class="m-pane" style="left:18px;top:38px;width:${pw}px;bottom:40px"><div class="m-roll" data-r="feed">${Array.from({ length: 24 }, (_, k) => post(k + 1)).join('')}</div></div>
-      <div class="m-pane" style="left:${pw + 36}px;top:38px;width:${pw}px;bottom:40px"><div class="m-roll" data-r="cat">${cat(1, 24)}</div><div class="m-bar"><i></i></div></div>
+      <div class="mb-label" style="left:18px;top:10px">Соцмережа: гортаю без мети</div>
+      <div class="mb-label" style="left:${x2}px;top:10px">Магазин: шукаю «Ноутбук №87»</div>
+      <div class="m-pane ig" style="left:18px;top:${top}px;width:${pw}px;height:${ph}px">
+        <div class="ig-top"><b>стрічка</b><span>♡ ✉</span></div>
+        <div class="ig-view"><div class="ig-roll">
+          <div class="ig-stories">${[0, 1, 2, 3, 4, 5].map((k) => `<i style="--h:${k * 61}deg"></i>`).join('')}</div>
+          ${[0, 1, 2, 3].map(post).join('')}
+          <div class="ig-load"><i></i></div>
+        </div></div>
+      </div>
+      <div class="m-pane shop" style="left:${x2}px;top:${top}px;width:${pw}px;height:${ph}px">
+        <div class="shop-top">🔍 <span>ноутбук №87</span></div>
+        <div class="ig-view"><div class="m-roll" data-r="cat">${cat(1, 24)}</div></div>
+        <div class="m-bar" style="top:48px;bottom:34px"><i></i></div>
+        <div class="shop-count">показано 24 з 300</div>
+        <div class="shop-open"></div>
+      </div>
       <div class="m-verdict" data-v="1" style="left:18px;bottom:8px;width:${pw}px"></div>
-      <div class="m-verdict" data-v="2" style="left:${pw + 36}px;bottom:8px;width:${pw}px"></div>`;
-    const feed = c.$('[data-r="feed"]'), catalog = c.$('[data-r="cat"]'), thumb = c.$('.m-bar i');
+      <div class="m-verdict" data-v="2" style="left:${x2}px;bottom:8px;width:${pw}px"></div>`;
+    const roll = c.$('.ig-roll'), load = c.$('.ig-load'), catalog = c.$('[data-r="cat"]'), thumb = c.$('.m-bar i');
+    const count = c.$('.shop-count'), open = c.$('.shop-open');
     const v1 = c.$('[data-v="1"]'), v2 = c.$('[data-v="2"]');
-    await c.cap('Підходить', 'Стрічка розваг: гортаєш без мети, нове — завжди внизу');
-    feed.style.transform = 'translateY(-55%)';
-    await c.wait(2600);
-    v1.innerHTML = '<span class="ok">✓ Підходить</span> — гортаю без мети';
-    await c.cap('Каталог', 'Тепер шукаємо конкретний товар — №87…');
+    const to = (el, y) => { el.style.transform = `translateY(${-y}px)`; };
+
+    await c.cap('Соцмережа', 'Стрічка розваг: гортаєш без мети, нові пости довантажуються самі');
+    to(roll, PH * 1.6);
+    await c.wait(1800);
+    c.$$('.ig-heart')[2].classList.add('on');
+    load.classList.add('on');
+    await c.wait(900);
+    load.insertAdjacentHTML('beforebegin', [4, 5, 6].map(post).join(''));
+    to(roll, PH * 4.2);
+    await c.wait(1800);
+    v1.innerHTML = '<span class="ok">✓ Підходить</span> — мета і є «гортати»';
+
+    await c.cap('Каталог', 'Тепер шукаємо конкретний товар — №87. Гортаємо, вантажиться ще й ще…');
     for (let k = 1; k <= 3; k++) {
       catalog.insertAdjacentHTML('beforeend', Array.from({ length: 12 }, (_, j) => card(24 + (k - 1) * 12 + j + 1)).join(''));
-      catalog.style.transform = `translateY(-${18 + k * 18}%)`;
-      thumb.style.height = `${60 / (k + 1)}%`; thumb.style.top = `${20 + k * 10}%`;
-      await c.wait(900);
+      to(catalog, k * 300);
+      thumb.style.height = `${60 / (k + 1)}%`; thumb.style.top = `${18 + k * 12}%`;
+      count.textContent = `показано ${24 + k * 12} з 300`;
+      await c.wait(1000);
     }
-    await c.cap('Не підходить', '<span class="no">✗ Повзунок «бреше»</span>, кінця не видно, а №87 загубився серед сотень карток');
+    await c.cap('Назад', 'Відкрили «Ноутбук №52» → натиснули «Назад»… і знову на початку списку');
+    open.innerHTML = '<b>Ноутбук №52</b><span>← Назад</span>'; open.classList.add('on');
+    await c.wait(1400);
+    open.classList.remove('on');
+    catalog.innerHTML = cat(1, 24); to(catalog, 0);
+    thumb.style.height = '60%'; thumb.style.top = '0';
+    count.innerHTML = '<span class="no">знову 24 з 300 — позицію втрачено</span>';
+    await c.wait(600);
+    await c.cap('Висновок', '<span class="no">✗ Для пошуку конкретного</span> нескінченний скрол заважає: кінця не видно, місце губиться');
     v2.innerHTML = '<span class="no">✗ Не підходить</span> — шукаю конкретне';
   },
 
@@ -207,7 +245,7 @@ window.EXTRA_SCENES = ({ mb, card, cat, srv }) => ({
   /* Віртуалізація: у DOM лише вікно перегляду */
   async virt(c) {
     const { W, H } = c;
-    const rows = 26, rh = Math.max(18, Math.floor((H - 36) / 6));
+    const rows = 26, rh = Math.max(20, Math.floor((H - 14) / 6));
     c.st.innerHTML = `
       <div class="m-vlist" style="height:${rows * rh}px">${Array.from({ length: rows }, (_, k) => `<div class="m-vrow" style="top:${k * rh}px;height:${rh - 3}px">Товар №${k + 1}</div>`).join('')}</div>
       <div class="m-vwin" style="height:${rh * 6}px"><span>екран</span></div>

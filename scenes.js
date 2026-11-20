@@ -25,16 +25,29 @@
     const stage = root.querySelector('.scene-stage');
     const capEl = root.querySelector('.scene-cap');
     const cntEl = root.querySelector('.sc-count');
+    /* Під час перемотки (instant / до потрібного кроку) CSS-переходи вимкнені,
+       інакше елементи «доїжджають» уже після кроку і сцена глючить */
+    let fast = false;
+    const pending = []; // очікування, які можна «проскочити» при перемотці
+    const syncFast = () => {
+      if (c.mode === 'instant' || fast) root.classList.add('is-fast');
+      else { void stage.offsetWidth; root.classList.remove('is-fast'); }
+    };
     const c = {
       mode, target, dead: false, st: stage, stepNo: 0, shown: 0, resume: null, finished: false,
-      get instant() { return c.mode === 'instant' || c.fast; }, fast: false,
+      get instant() { return c.mode === 'instant' || c.fast; },
+      get fast() { return fast; },
+      set fast(v) { fast = v; syncFast(); if (v) { const p = pending.splice(0); p.forEach((f) => f()); } },
       W: stage.clientWidth || 780, H: stage.clientHeight || 580,
       $: (sel) => stage.querySelector(sel),
       $$: (sel) => [...stage.querySelectorAll(sel)],
       wait: (ms) => new Promise((res, rej) => {
         if (c.dead) return rej(STOP);
         if (c.instant) return res();
-        setTimeout(() => (c.dead ? rej(STOP) : res()), ms);
+        let done = false;
+        const fin = () => { if (done) return; done = true; c.dead ? rej(STOP) : res(); };
+        pending.push(fin);
+        setTimeout(() => { const i = pending.indexOf(fin); if (i >= 0) pending.splice(i, 1); fin(); }, ms);
       }),
       /* Кожен підпис = крок. У ручному режимі тут зупиняємось і чекаємо «крок ▶» */
       async cap(step, text) {
@@ -73,6 +86,7 @@
       flash: (id) => stage.querySelector(`.mb[data-id="${id}"] .mb__flash`),
       box: (el) => { const a = el.getBoundingClientRect(), b = stage.getBoundingClientRect(), s = b.width / stage.clientWidth || 1; return { x: (a.left - b.left) / s, y: (a.top - b.top) / s, w: a.width / s, h: a.height / s }; }
     };
+    syncFast();
     return c;
   }
 
@@ -438,8 +452,8 @@
   if (typeof window.EXTRA_SCENES === 'function') Object.assign(SCENES, window.EXTRA_SCENES({ mb, card, cat, srv, pager }));
 
   /* ---------- Запуск сцен ---------- */
-  /* data-auto: once (за замовчуванням) — програти при відкритті слайда;
-                loop — програвати по колу, поки слайд відкритий; none — тільки кнопками */
+  /* data-auto: loop — програвати по колу, поки слайд відкритий;
+                інше — сцена стоїть на повному кадрі, кроки ведуться кнопками ◀ ▶ / ⏵ Play */
   const runs = new WeakMap();
   const activeSlide = () => document.querySelector('.slide.is-active');
   async function play(root, mode = 'auto', target = 1) {
@@ -466,6 +480,8 @@
     const c = runs.get(root);
     if (c && c.mode === 'manual' && c.resume) { c.target++; c.resume(); return; }
     if (c && c.mode === 'manual' && c.finished) return;
+    /* крок ще анімується — миттєво доматуємо до наступного, а не починаємо спочатку */
+    if (c && c.mode === 'manual' && !c.dead) { c.target = c.shown + 1; c.fast = true; return; }
     const cur = c && c.mode === 'auto' && !c.finished ? c.shown : 0;
     play(root, 'manual', Math.min(+root.dataset.steps || 99, cur + 1));
   };
@@ -495,8 +511,10 @@
   });
   document.addEventListener('slide:enter', (e) => {
     e.detail.slide.querySelectorAll('.scene[data-scene]').forEach((root) => {
-      const auto = root.dataset.auto || 'once';
-      if (auto !== 'none') play(root, 'auto');
+      /* Цикли грають самі; покрокові сцени стоять на повному кадрі —
+         доповідач сам веде їх кнопками ▶ (з 1-го кроку) або ⏵ Play */
+      if (root.dataset.auto === 'loop') play(root, 'auto');
+      else play(root, 'instant');
     });
   });
 
